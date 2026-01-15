@@ -6,7 +6,7 @@ const CodeShooter = () => {
   const [selectedCharacter, setSelectedCharacter] = useState(null);
   const [level, setLevel] = useState(1);
   const [score, setScore] = useState(0);
-  const [playerHealth, setPlayerHealth] = useState(50);
+  const [playerHealth, setPlayerHealth] = useState(100);
   const [enemies, setEnemies] = useState([]);
   const [projectiles, setProjectiles] = useState([]);
   const [playerPos, setPlayerPos] = useState({ x: 50, y: 80 });
@@ -15,12 +15,14 @@ const CodeShooter = () => {
   const [passwordInput, setPasswordInput] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const MAX_LEVEL = 5;
+  const BOSS_LEVEL_START = MAX_LEVEL;
   const GAME_PASSWORD = 'RobBestPSM';
   const canvasRef = useRef(null);
   const enemiesRef = useRef([]);
   const projectilesRef = useRef([]);
   const isFiringRef = useRef(false);
   const lastPlayerShotRef = useRef(0);
+  const playerPosRef = useRef(playerPos);
   const levelAdvanceLockedRef = useRef(false);
   const gameLoopRef = useRef(null);
   const audioRef = useRef({});
@@ -33,6 +35,9 @@ const CodeShooter = () => {
     audioRef.current.victoryMusic.volume = 0.5;
     audioRef.current.gameOverMusic = new Audio('https://cdn.pixabay.com/audio/2022/05/27/audio_1808fbf07a.mp3');
     audioRef.current.gameOverMusic.volume = 0.4;
+    audioRef.current.introMusic = new Audio('/audio/scary-music-box-165983.mp3');
+    audioRef.current.introMusic.volume = 0.5;
+    audioRef.current.introMusic.loop = true;
     audioRef.current.sfx = [];
 
     return () => {
@@ -52,6 +57,10 @@ const CodeShooter = () => {
   useEffect(() => {
     projectilesRef.current = projectiles;
   }, [projectiles]);
+
+  useEffect(() => {
+    playerPosRef.current = playerPos;
+  }, [playerPos]);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -86,12 +95,18 @@ const CodeShooter = () => {
       default: return;
     }
     const sound = new Audio(soundUrl);
-    sound.volume = 0.3;
+    sound.volume = 0.05;
     audioRef.current.sfx?.push(sound);
     sound.addEventListener('ended', () => {
       audioRef.current.sfx = (audioRef.current.sfx || []).filter(sfx => sfx !== sound);
     });
     sound.play().catch(e => console.log('Sound play failed:', e));
+  };
+
+  const startIntroMusic = () => {
+    if (!soundEnabled || !audioRef.current.introMusic) return;
+    audioRef.current.introMusic.currentTime = 0;
+    audioRef.current.introMusic.play().catch(e => console.log('Intro music failed:', e));
   };
 
   useEffect(() => {
@@ -105,6 +120,12 @@ const CodeShooter = () => {
     if (gameState === 'victory' && soundEnabled) {
       audioRef.current.victoryMusic.play().catch(e => console.log('Victory music failed:', e));
     }
+    if (gameState === 'intro' && soundEnabled) {
+      audioRef.current.introMusic.play().catch(e => console.log('Intro music failed:', e));
+    } else if (audioRef.current.introMusic) {
+      audioRef.current.introMusic.pause();
+      audioRef.current.introMusic.currentTime = 0;
+    }
     if (gameState === 'gameOver' && soundEnabled) {
       audioRef.current.gameOverMusic.play().catch(e => console.log('Game over music failed:', e));
     }
@@ -114,7 +135,7 @@ const CodeShooter = () => {
     { id: 1, name: "Rob", color: "#3b82f6", speed: 6, fireRate: 200, imageUrl: "/images/rob.png", emoji: "👨‍💼" },
     { id: 2, name: "Shruthi", color: "#8b5cf6", speed: 8, fireRate: 250, imageUrl: "/images/shruthi.png", emoji: "👩‍💻" },
     { id: 3, name: "Faith", color: "#10b981", speed: 9, fireRate: 300, imageUrl: "/images/faith.png", emoji: "👩‍🔬" },
-    { id: 4, name: "Hasti", color: "#f59e0b", speed: 5, fireRate: 80, imageUrl: "/images/hasti.png", emoji: "👩‍🎨" },
+    { id: 4, name: "Hasti", color: "#f59e0b", speed: 5, fireRate: 100, imageUrl: "/images/hasti.png", emoji: "👩‍🎨" },
     { id: 5, name: "Hannah", color: "#ec4899", speed: 7, fireRate: 150, imageUrl: "/images/hannah.png", emoji: "👩‍🚀" }
   ];
 
@@ -122,6 +143,8 @@ const CodeShooter = () => {
     { name: "Sohaib", imageUrl: "/images/sohaib.png", emoji: "😎", health: 2, speed: 1.5 },
     { name: "Joe", imageUrl: "/images/joe.png", emoji: "🤓", health: 2, speed: 2 }
   ];
+
+  const bossFace = { name: "Ben", imageUrl: "/images/ben.png", emoji: "🧠", health: 4, speed: 2.2 };
 
   const codeSnippets = ["Skill ID", "Client ID", "Ticket", "LOE", "Spanish", "NEED IT ASAP", "SOP"];
 
@@ -137,13 +160,15 @@ const CodeShooter = () => {
   const startLevel = (lvl) => {
     levelAdvanceLockedRef.current = false;
     const isBossLevel = lvl === MAX_LEVEL;
-    const enemyCount = isBossLevel ? 2 : Math.min(2 + lvl, 6);
+    const enemyCount = isBossLevel ? 2 : (lvl === 3 ? 4 : Math.min(2 + lvl, 6));
     const newEnemies = [];
 
     for (let i = 0; i < enemyCount; i++) {
-      const faceData = enemyFaces[Math.floor(Math.random() * enemyFaces.length)];
+      const faceData = isBossLevel
+        ? bossFace
+        : enemyFaces[Math.floor(Math.random() * enemyFaces.length)];
       const behaviorType = Math.random();
-      const baseHealth = lvl === 1 ? faceData.health : faceData.health + 1;
+      const baseHealth = lvl <= 3 ? faceData.health : faceData.health + 1;
       const scaledHealth = isBossLevel ? baseHealth * 2 : baseHealth;
       
       newEnemies.push({
@@ -266,9 +291,12 @@ const CodeShooter = () => {
       if (proj.active === false) return proj;
 
       if (!proj.friendly) {
-        const dist = Math.sqrt(Math.pow(playerPos.x - proj.x, 2) + Math.pow(playerPos.y - proj.y, 2));
+        const dist = Math.sqrt(
+          Math.pow(playerPosRef.current.x - proj.x, 2) +
+          Math.pow(playerPosRef.current.y - proj.y, 2)
+        );
         if (dist < 5) {
-          playerDamage += 40;
+          playerDamage += 15;
           playSound('damage');
           return { ...proj, active: false };
         }
@@ -361,6 +389,16 @@ const CodeShooter = () => {
     setEnemies([]);
     setProjectiles([]);
     setGameState('characterSelect');
+  };
+
+  const restartWithSamePlayer = () => {
+    levelAdvanceLockedRef.current = false;
+    setLevel(1);
+    setScore(0);
+    setPlayerHealth(100);
+    setEnemies([]);
+    setProjectiles([]);
+    setGameState('playing');
   };
 
   const toggleSound = () => {
@@ -456,7 +494,7 @@ const CodeShooter = () => {
         <div className="text-center">
           <h1 className="text-6xl font-bold text-white mb-4 animate-pulse">The SR Game 💻</h1>
           <p className="text-2xl text-blue-200 mb-4">Poly Showdown</p>
-          <p className="text-lg text-blue-300 mb-8">Defeat Sohaib & Joe with your impeccable client management and troubleshooting skills!</p>
+          <p className="text-lg text-blue-300 mb-8">Defeat the SR team with your impeccable client management and troubleshooting skills!</p>
           <button onClick={() => setGameState('characterSelect')} className="bg-blue-500 hover:bg-blue-600 text-white px-8 py-4 rounded-lg text-xl font-bold transition">
             START GAME
           </button>
@@ -489,10 +527,47 @@ const CodeShooter = () => {
             ))}
           </div>
           {selectedCharacter && (
-            <button onClick={() => setGameState('playing')} className="bg-green-500 hover:bg-green-600 text-white px-8 py-4 rounded-lg text-xl font-bold transition animate-pulse">
+            <button
+              onClick={() => {
+                startIntroMusic();
+                setGameState('intro');
+              }}
+              className="bg-green-500 hover:bg-green-600 text-white px-8 py-4 rounded-lg text-xl font-bold transition animate-pulse"
+            >
               DEPLOY TO PRODUCTION! 🚀
             </button>
           )}
+        </div>
+      </div>
+    );
+  }
+
+  if (gameState === 'intro') {
+    return (
+      <div className="w-full h-screen bg-gradient-to-b from-white via-slate-100 to-slate-200 flex items-center justify-center">
+        <div className="text-center max-w-2xl px-6">
+          <div className="text-sm tracking-[0.3em] text-slate-500 uppercase mb-4">
+            Incoming Mission Brief
+          </div>
+          <div className="flex justify-center mb-6">
+            <div className="animate-fade-in">
+              <CharacterAvatar character={selectedCharacter} size={160} />
+            </div>
+          </div>
+          <div className="border-2 border-black bg-white text-black text-lg px-8 py-8 rounded-2xl shadow-lg leading-relaxed">
+            Your job is to save this account. Use projectiles to your advantage. And dodge the bugs.
+            <br />
+            <br />
+            Do not be afraid.
+          </div>
+          <div className="mt-6 flex items-center justify-center">
+            <button
+              onClick={() => setGameState('playing')}
+              className="bg-black text-white px-8 py-4 rounded-lg text-xl font-bold hover:bg-gray-900 transition"
+            >
+              BEGIN MISSION
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -505,7 +580,7 @@ const CodeShooter = () => {
           <Trophy className="w-32 h-32 text-white mx-auto mb-4 animate-bounce" />
           <h1 className="text-6xl font-bold text-white mb-4">CONGRATS!</h1>
           <p className="text-3xl text-white mb-4 font-bold">SAFERIDE SPANISH DUE IN 1 MONTH</p>
-          <p className="text-2xl text-white mb-2">Sohaib & Joe have been debugged! 🎉</p>
+          <p className="text-2xl text-white mb-2">You've done it! Your work saved the account!</p>
           <p className="text-3xl text-white font-bold mb-8">Final Score: {score}</p>
           <button onClick={resetGame} className="bg-white text-orange-500 px-8 py-4 rounded-lg text-xl font-bold hover:bg-gray-100 transition">
             PLAY AGAIN
@@ -558,7 +633,7 @@ const CodeShooter = () => {
           <div className="flex items-center gap-2 mb-2">
             <Trophy className="w-5 h-5" />
             <span className="font-bold">Level {level}/{MAX_LEVEL}</span>
-            {level === MAX_LEVEL && <span className="text-yellow-400 text-xs">BOSS LEVEL</span>}
+            {level >= BOSS_LEVEL_START && <span className="text-yellow-400 text-xs">BOSS LEVEL</span>}
           </div>
           <div className="flex items-center gap-2 mb-2">
             <Zap className="w-5 h-5 text-yellow-400" />
@@ -578,9 +653,23 @@ const CodeShooter = () => {
           <CharacterAvatar character={selectedCharacter} size={80} />
           <div className="font-bold mt-2">{selectedCharacter?.name}</div>
         </div>
-        <button onClick={toggleSound} className="w-full bg-black bg-opacity-50 p-3 rounded-lg hover:bg-opacity-70 transition">
-          {soundEnabled ? <Volume2 className="w-6 h-6 mx-auto" /> : <VolumeX className="w-6 h-6 mx-auto" />}
-        </button>
+        <div className="flex flex-col gap-2">
+          <button
+            onClick={restartWithSamePlayer}
+            className="w-full bg-black bg-opacity-50 p-3 rounded-lg hover:bg-opacity-70 transition text-sm font-bold"
+          >
+            RESTART
+          </button>
+          <button
+            onClick={resetGame}
+            className="w-full bg-black bg-opacity-50 p-3 rounded-lg hover:bg-opacity-70 transition text-sm font-bold"
+          >
+            BACK
+          </button>
+          <button onClick={toggleSound} className="w-full bg-black bg-opacity-50 p-3 rounded-lg hover:bg-opacity-70 transition">
+            {soundEnabled ? <Volume2 className="w-6 h-6 mx-auto" /> : <VolumeX className="w-6 h-6 mx-auto" />}
+          </button>
+        </div>
       </div>
 
       <div
