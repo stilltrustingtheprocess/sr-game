@@ -296,7 +296,7 @@ const CodeShooter = () => {
           Math.pow(playerPosRef.current.y - proj.y, 2)
         );
         if (dist < 5) {
-          playerDamage += 15;
+          playerDamage += 45;
           playSound('damage');
           return { ...proj, active: false };
         }
